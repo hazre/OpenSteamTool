@@ -208,6 +208,9 @@ using KeyValuesSystemSteam_t = IKeyValuesSystem* (*)();
 
 struct CNetPacket
 {
+	// New steamclient (1788989629): packet object grew by 8 bytes.
+	// Observed in RecvPkt: [pkt+0x10] = data, [pkt+0x18] = size.
+	void* m_pVTable;
 	HCONNECTION m_hConnection;
 	uint8* m_pubData;
 	uint32 m_cubData;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(OpenSteamTool VERSION 1.0.0 LANGUAGES C CXX)
+project(OpenSteamTool VERSION 1.0.0 LANGUAGES C CXX ASM_MASM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -169,10 +169,15 @@ target_compile_definitions(OpenSteamTool PRIVATE
 )
 
 # ---------------------------------------------------------------------------
-# dwmapi.dll hijack — small loader DLL placed alongside Steam.
+# dwmapi.dll hijack - dynamic wrapper (stubs in dwmapi_tramp.asm forward to the real System32 copy;
+# see tools/generate_dwmapi_wrapper.py). Must NOT use export forwarders: a bare DWMAPI.X forwarder
+# resolves back to the proxy itself when it is the first dwmapi in the process (self-loop ->
+# ERROR_BAD_EXE_FORMAT / Failed to load steamui.dll).
 # ---------------------------------------------------------------------------
 add_library(dwmapi SHARED
     dwmapi/dwmapi.cpp
+    dwmapi/dwmapi_tramp.asm
+    dwmapi/dwmapi.def
 )
 
 # ---------------------------------------------------------------------------
