@@ -136,19 +136,28 @@ namespace {
         return true;
     }
 
-    static void ShowMissingPopup(const std::string& sha256)
+    static void ShowMissingPopup(const std::string& sha256,
+                                  const std::string& lastUrl,
+                                  const std::string& treeUrl)
     {
+        std::string upstream = treeUrl.empty()
+            ? "       (unrecognized remote template; see main.log for tried URLs)\n"
+            : "       " + treeUrl + "\n";
+        std::string tried = lastUrl.empty()
+            ? ""
+            : "Last tried:\n       " + lastUrl + "\n";
         SteamDiagnostics::ShowWarning(
             "OpenSteamTool - IPC spec missing",
             "OpenSteamTool: IPC spec file not found.\n\n"
             "IPC interception is disabled for this session; pattern-based "
-            "hooks are unaffected.\n\n"
+            "hooks are unaffected.\n\n" +
+            tried +
             "You can:\n"
             "  1. Wait for the next upstream publish and restart Steam.\n"
             "  2. Drop a matching TOML at:\n"
             "       <Steam>\\opensteamtool\\ipc\\steamclient\\" + sha256 + ".toml\n"
-            "  3. Check upstream:\n"
-            "       https://github.com/OpenSteam001/steam-monitor/tree/ipc/steamclient");
+            "  3. Check upstream:\n" +
+            upstream);
     }
 
 } // namespace
@@ -166,7 +175,10 @@ bool Load(const std::string& steamclientPath)
     });
 
     if (!r.ok) {
-        ShowMissingPopup(r.sha256.empty() ? "(hash failed)" : r.sha256);
+        ShowMissingPopup(r.sha256.empty() ? "(hash failed)" : r.sha256,
+                         r.lastUrl,
+                         RemoteToml::UpstreamTreeUrl(kIPCChannel,
+                                                     "steamclient"));
         return false;
     }
 
@@ -175,7 +187,9 @@ bool Load(const std::string& steamclientPath)
         root = toml::parse(r.body);
     } catch (const toml::parse_error& e) {
         LOG_WARN("IPCLoader: TOML parse error: {}", e.description());
-        ShowMissingPopup(r.sha256);
+        ShowMissingPopup(r.sha256, r.lastUrl,
+                         RemoteToml::UpstreamTreeUrl(kIPCChannel,
+                                                     "steamclient"));
         return false;
     }
 

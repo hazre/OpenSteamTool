@@ -14,10 +14,10 @@ namespace RemoteToml {
 
 namespace {
     constexpr const char* kGithubTemplate =
-        "https://raw.githubusercontent.com/OpenSteam001/steam-monitor/"
+        "https://raw.githubusercontent.com/hazre/steam-monitor/main/"
         "{channel}/{component}/{sha256}.toml";
     constexpr const char* kJsdelivrTemplate =
-        "https://cdn.jsdelivr.net/gh/OpenSteam001/steam-monitor@"
+        "https://cdn.jsdelivr.net/gh/hazre/steam-monitor@main/"
         "{channel}/{component}/{sha256}.toml";
 
     static bool HasPlaceholder(std::string_view text, std::string_view placeholder)
@@ -66,6 +66,20 @@ namespace {
         }
 
         return { remoteUrlTemplate };
+    }
+
+    static std::vector<std::string> Split3(std::string_view text)
+    {
+        std::vector<std::string> parts;
+        size_t start = 0;
+        for (int i = 0; i < 3; ++i) {
+            size_t pos = text.find('/', start);
+            if (pos == std::string_view::npos) return {};
+            parts.emplace_back(text.substr(start, pos - start));
+            start = pos + 1;
+        }
+        if (parts[0].empty() || parts[1].empty() || parts[2].empty()) return {};
+        return parts;
     }
 } // namespace
 
@@ -129,6 +143,7 @@ Result Fetch(const Request& request)
     }
 
     // 4. Remote OK → write cache, return body.
+    out.lastUrl = lastUrl;
     if (http.ok && http.status == 200 && !http.body.empty()) {
         std::ofstream ofs(cachePath, std::ios::binary);
         if (ofs) {
@@ -175,6 +190,45 @@ Result Fetch(const Request& request)
              request.channel, request.component,
              lastUrl.empty() ? "<none>" : lastUrl, http.status);
     return out;
+}
+
+std::string UpstreamTreeUrl(const std::string& channel,
+                            const std::string& component)
+{
+    std::string tpl = Config::GetRemoteUrlTemplate();
+    if (tpl.empty()) tpl = kGithubTemplate;
+
+    // raw.githubusercontent.com/{owner}/{repo}/{branch}/...
+    constexpr std::string_view kRawHost = "raw.githubusercontent.com/";
+    if (size_t pos = tpl.find(kRawHost); pos != std::string::npos) {
+        auto parts = Split3(std::string_view(tpl).substr(pos + kRawHost.size()));
+        if (parts.size() == 3)
+            return "https://github.com/" + parts[0] + "/" + parts[1] +
+                   "/tree/" + parts[2] + "/" + channel + "/" + component;
+        return {};
+    }
+
+    // cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/...
+    constexpr std::string_view kJsdHost = "cdn.jsdelivr.net/gh/";
+    if (size_t pos = tpl.find(kJsdHost); pos != std::string::npos) {
+        std::string_view rest =
+            std::string_view(tpl).substr(pos + kJsdHost.size());
+        size_t slash = rest.find('/');
+        size_t at = rest.find('@');
+        if (slash == std::string_view::npos || at == std::string_view::npos ||
+            at < slash)
+            return {};
+        size_t branchEnd = rest.find('/', at + 1);
+        if (branchEnd == std::string_view::npos) return {};
+        std::string owner(rest.substr(0, slash));
+        std::string repo(rest.substr(slash + 1, at - slash - 1));
+        std::string branch(rest.substr(at + 1, branchEnd - at - 1));
+        if (owner.empty() || repo.empty() || branch.empty()) return {};
+        return "https://github.com/" + owner + "/" + repo +
+               "/tree/" + branch + "/" + channel + "/" + component;
+    }
+
+    return {};
 }
 
 } // namespace RemoteToml

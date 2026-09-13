@@ -145,20 +145,29 @@ static PatternMap ParsePatternString(std::string_view body,
 // an actionable bug report.  We deliberately only disable hooks for the
 // failing module — the rest of OpenSteamTool keeps working.
 static void ShowDownloadFailedPopup(const std::string& dllName,
-                                    const std::string& sha256,
-                                    const std::string& component)
+                                     const std::string& sha256,
+                                     const std::string& component,
+                                     const std::string& lastUrl,
+                                     const std::string& treeUrl)
 {
+    std::string upstream = treeUrl.empty()
+        ? "       (unrecognized remote template; see main.log for tried URLs)\n"
+        : "       " + treeUrl + "\n";
+    std::string tried = lastUrl.empty()
+        ? ""
+        : "Last tried:\n       " + lastUrl + "\n";
     SteamDiagnostics::ShowWarning(
         "OpenSteamTool - Unsupported Steam Version",
         "OpenSteamTool: signature file not found for " + dllName + ".\n\n"
         "Hooks that depend on " + dllName + " are disabled for this session; "
         "other modules are unaffected.\n\n"
+        + tried +
         "You can:\n"
         "  1. Wait for the next signature update, then restart Steam.\n"
         "  2. Drop a matching TOML at:\n"
         "       <Steam>\\opensteamtool\\pattern\\" + component + "\\" + sha256 + ".toml\n"
-        "  3. Check upstream:\n"
-        "       https://github.com/OpenSteam001/steam-monitor/tree/pattern/" + component + "\n"
+        "  3. Check upstream:\n" +
+        upstream +
         "  4. Report the diagnostics below:\n"
         "       https://github.com/OpenSteam001/OpenSteamTool/issues");
 }
@@ -198,7 +207,9 @@ bool Load(OSTPlatform::DynamicLibrary::ModuleHandle module, const std::string& d
     // Total failure — popup + disable module's hooks.
     std::string dllName = fs::path(dllPath).filename().string();
     std::string sha     = r.sha256.empty() ? "(hash failed)" : r.sha256;
-    ShowDownloadFailedPopup(dllName, sha, component);
+    ShowDownloadFailedPopup(dllName, sha, component, r.lastUrl,
+                            RemoteToml::UpstreamTreeUrl(kPatternChannel,
+                                                        component));
     g_failedModules.insert(module);
     return false;
 }
